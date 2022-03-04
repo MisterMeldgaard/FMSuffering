@@ -1,0 +1,121 @@
+// Open the file that defines the type "expr" we shall use as AST
+%{
+open FMSufferingTypesAST
+%}
+
+// Declare the tokens (terminal symbols)
+%token <float> NUM
+%token <string> NAME
+%token TIMES DIV PLUS MINUS POW LPAR RPAR ASSIGN SKIP SEMICOLON IF FI DO OD LBRAC RBRAC ARROW EQUAL NOT SMALLER GREATER AND OR TRUE FALSE EOF SQBRAC
+// NOTE: the actual formats of these tokens are defined in the lexer file
+//       as regular expressions
+
+// Specify precedence and associativity of operators
+// Precedence is given by the order (from low to high)
+// %left PLUS MINUS
+// %left TIMES DIV
+// %right POW
+%right SQBRAC SEMICOLON
+
+// We declare the initial non-terminal symbol
+%start start
+
+// We specify the return type of each of then non-terminal symbols
+%type <command> start
+%type <command> command
+%type <guardedCommand> guardedCommand
+%type <arithExpr> arithExpr0
+%type <arithExpr> arithExpr1
+%type <arithExpr> arithExpr2
+%type <arithExpr> arithExpr3
+%type <boolExpr> boolExpr0
+%type <boolExpr> boolExpr1
+%type <boolExpr> boolExpr2
+%type <boolExpr> boolExpr3
+
+// Grammar productions
+%%
+
+// The first production in "formal" notation is
+// start -> expression
+// here written:
+start: command EOF             { $1 }
+
+// Note that we need to insert an End-Of-File (EOF)
+// The code annotation { $1 } specifies that parsing with this production
+// returns whatever parsing the expression returns: $1 is the result of parsing
+// the first component of the production (i.e. expression)
+
+// The productions for expressions are like in the grammar we saw in class
+// written in the yacc format:
+
+// C ::= x := a | A[a] := a | skip | C ; C | if GC fi | do GC od
+// GC ::= b -> C | GC [] GC
+// a ::= n | x | A[a] | a + a | a - a | a * a | a / a | - a | a ^ a | (a)
+// b ::= true | false | b & b | b | b | b && b | b || b | !b
+// | a = a | a != a | a > a | a >= a | a < a | a <= a | (b)
+
+command:
+  | NAME ASSIGN arithExpr0                          { Assign($1,$3) }
+  | NAME LBRAC arithExpr0 RBRAC ASSIGN arithExpr0   { AssignArray($1,$3,$6) }
+  | SKIP                                            { Skip }
+  | command SEMICOLON command                       { CommandCommand($1,$3) }
+  | IF guardedCommand FI                            { IfStatement($2) }
+  | DO guardedCommand OD                            { DoStatement($2) }
+
+guardedCommand:
+  | boolExpr0 ARROW command                         { Condition($1,$3) }
+  | guardedCommand SQBRAC guardedCommand       { Choice($1,$3) } 
+
+arithExpr0:
+  | arithExpr0 PLUS arithExpr1    { PlusArithExpr($1,$3) }
+  | arithExpr0 MINUS arithExpr1   { MinusArithExpr($1,$3) }
+  | arithExpr1                    { $1 }
+
+arithExpr1:
+  | arithExpr1 TIMES arithExpr2   { TimesArithExpr($1,$3) }
+  | arithExpr1 DIV arithExpr2     { DivArithExpr($1,$3) }
+  | arithExpr2                    { $1 }
+
+arithExpr2:
+  | arithExpr3 POW arithExpr2     { PowArithExpr($1,$3) }
+  | arithExpr3                    { $1 }
+
+arithExpr3:
+  | MINUS arithExpr3              { UMinusArithExpr($2) }
+  | NUM                           { Num($1) }
+  | NAME                          { GetVariable($1) }
+  | NAME LBRAC arithExpr0 RBRAC   { GetArrayItem($1,$3) }
+  | LPAR arithExpr0 RPAR          { $2 }
+
+boolExpr0:
+  | boolExpr0 OR boolExpr1        { StrongOrExpr($1,$3) }
+  | boolExpr0 OR OR boolExpr1     { WeakOrExpr($1,$4) }
+  | boolExpr1                     { $1 }
+
+boolExpr1:
+  | boolExpr1 AND boolExpr2        { StrongAndExpr($1,$3) }
+  | boolExpr1 AND AND boolExpr2    { WeakAndExpr($1,$4) }
+  | boolExpr2                      { $1 }
+
+boolExpr2:
+  | arithExpr0 EQUAL arithExpr0         { EqualExpr($1,$3) }
+  | arithExpr0 NOT EQUAL arithExpr0     { NotEqualExpr($1,$4) }
+  | arithExpr0 GREATER arithExpr0       { GreaterExpr($1,$3) }
+  | arithExpr0 GREATER EQUAL arithExpr0 { GreaterEqualExpr($1,$4) }
+  | arithExpr0 SMALLER arithExpr0       { SmallerExpr($1,$3) }
+  | arithExpr0 SMALLER EQUAL arithExpr0 { SmallerEqualExpr($1,$4) }
+  | boolExpr3                           { $1 }
+
+boolExpr3:
+  | NOT boolExpr3                 { NotExpr($2) }
+  | TRUE                          { True }
+  | FALSE                         { False }
+  | LPAR boolExpr0 RPAR           { $2 }
+
+// Again, the code annotation specifies the result of parsing
+// For example { TimesExpr($1,$3) } specifies that parsing with the production
+// returns the value TimesExpr($1,$3), where $i is the result of parsing
+// component i in the production (in this case the lhs and rhs operands)
+
+%%

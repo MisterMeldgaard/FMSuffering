@@ -1,0 +1,63 @@
+// The generated lexer module will start with this code
+{
+module FMSufferingLexer
+open FSharp.Text.Lexing
+open System
+// open the module that defines the tokens
+open FMSufferingParser
+// Set the language to English such that 4.0 is parsed as 4 and not 40.
+System.Globalization.CultureInfo.CurrentCulture <- new System.Globalization.CultureInfo("en-US")
+}
+
+// We define macros for some regular expressions we will use later
+let digit       = ['0'-'9']
+let num         = digit+
+let whitespace  = ['\u00A0''\n''\r''\t'' ']
+let name        = ['a'-'z''A'-'Z'](['a'-'z''A'-'Z' ]|digit)*
+let newline     = "\n\r" | '\n' | '\r'
+
+// We define now the rules for recognising and building tokens
+// for each of the tokens of our language we need a rule
+// NOTE: rules are applied in order top-down.
+//       This is important when tokens overlap (not in this example)
+
+// C ::= x := a | A[a] := a | skip | C ; C | if GC fi | do GC od
+// GC ::= b -> C | GC [] GC
+// a ::= n | x | A[a] | a + a | a - a | a * a | a / a | - a | a ^ a | (a)
+// b ::= true | false | b & b | b | b | b && b | b || b | !b
+// | a = a | a != a | a > a | a >= a | a < a | a <= a | (b)
+
+rule tokenize = parse
+// deal with tokens that need to be ignored (skip them)
+| newline       { lexbuf.EndPos <- lexbuf.EndPos.NextLine; tokenize lexbuf; }
+// deal with tokens that need to be built
+| '*'           { TIMES }
+| '/'           { DIV }
+| '+'           { PLUS }
+| '-'           { MINUS }
+| '^'           { POW }
+| '('           { LPAR }
+| ')'           { RPAR }
+| ":="          { ASSIGN }
+| "skip"        { SKIP }
+| ';'           { SEMICOLON }
+| "[]"          { SQBRAC }
+| "if"whitespace          { IF }
+| whitespace"fi"          { FI }
+| "do"whitespace          { DO }
+| whitespace"od"          { OD }
+| '['           { LBRAC }
+| ']'           { RBRAC }
+| "->"          { ARROW }
+| '='           { EQUAL }
+| '!'           { NOT }
+| '<'           { SMALLER }
+| '>'           { GREATER }
+| '&'           { AND }
+| '|'           { OR }
+| "true"        { TRUE }
+| "false"       { FALSE }
+| whitespace    { tokenize lexbuf }
+| num           { NUM(Double.Parse(LexBuffer<_>.LexemeString lexbuf)) }
+| name          { NAME(LexBuffer<_>.LexemeString lexbuf) }
+| eof           { EOF }
