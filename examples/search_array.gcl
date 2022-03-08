@@ -1,0 +1,9 @@
+i:=0;
+try do A[i]=x -> throw yes
+    [] !(A[i]=x) -> if i<9 -> i:=i+1
+                    [] i>=9 -> throw no
+                    fi
+    od
+catch yes: x:=1
+   [] no: x:=2
+yrt

@@ -31,8 +31,8 @@ and boolExpr =
   | NotEqualExpr of (arithExpr * arithExpr)
   | GreaterExpr of (arithExpr * arithExpr)
   | GreaterEqualExpr of (arithExpr * arithExpr)
-  | SmallerExpr of (arithExpr * arithExpr)
-  | SmallerEqualExpr of (arithExpr * arithExpr)
+  | LesserExpr of (arithExpr * arithExpr)
+  | LesserEqualExpr of (arithExpr * arithExpr)
 
 and guardedCommand =
   | Condition of (boolExpr * command)
@@ -42,6 +42,8 @@ and command =
   | Assign of (string * arithExpr)
   | AssignArray of (string * arithExpr * arithExpr)
   | Skip
+  | Break
+  | Continue
   | CommandCommand of (command * command)
   | IfStatement of (guardedCommand)
   | DoStatement of (guardedCommand)

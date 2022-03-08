@@ -31,6 +31,23 @@ rule tokenize = parse
 // deal with tokens that need to be ignored (skip them)
 | newline       { lexbuf.EndPos <- lexbuf.EndPos.NextLine; tokenize lexbuf; }
 // deal with tokens that need to be built
+| "skip"        { SKIP }
+| "break"       { BREAK }
+| "continue"    { CONTINUE }
+| "true"        { TRUE }
+| "false"       { FALSE }
+| "->"          { ARROW }
+| ":="          { ASSIGN }
+| "[]"          { SQBRAC }
+| "||"          { OROR }
+| "&&"          { ANDAND }
+| "!="          { NOTEQUAL }
+| ">="          { GREATEREQUAL }
+| "<="          { LESSEREQUAL }
+| "if"whitespace          { IF }
+| whitespace"fi"          { FI }
+| "do"whitespace          { DO }
+| whitespace"od"          { OD }
 | '*'           { TIMES }
 | '/'           { DIV }
 | '+'           { PLUS }
@@ -38,25 +55,15 @@ rule tokenize = parse
 | '^'           { POW }
 | '('           { LPAR }
 | ')'           { RPAR }
-| ":="          { ASSIGN }
-| "skip"        { SKIP }
 | ';'           { SEMICOLON }
-| "[]"          { SQBRAC }
-| "if"whitespace          { IF }
-| whitespace"fi"          { FI }
-| "do"whitespace          { DO }
-| whitespace"od"          { OD }
 | '['           { LBRAC }
 | ']'           { RBRAC }
-| "->"          { ARROW }
 | '='           { EQUAL }
 | '!'           { NOT }
-| '<'           { SMALLER }
+| '<'           { LESSER }
 | '>'           { GREATER }
 | '&'           { AND }
 | '|'           { OR }
-| "true"        { TRUE }
-| "false"       { FALSE }
 | whitespace    { tokenize lexbuf }
 | num           { NUM(Double.Parse(LexBuffer<_>.LexemeString lexbuf)) }
 | name          { NAME(LexBuffer<_>.LexemeString lexbuf) }

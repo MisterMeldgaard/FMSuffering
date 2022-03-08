@@ -20,7 +20,7 @@ type token =
   | ARROW
   | EQUAL
   | NOT
-  | SMALLER
+  | LESSER
   | GREATER
   | AND
   | OR
@@ -28,6 +28,13 @@ type token =
   | FALSE
   | EOF
   | SQBRAC
+  | OROR
+  | ANDAND
+  | NOTEQUAL
+  | GREATEREQUAL
+  | LESSEREQUAL
+  | BREAK
+  | CONTINUE
   | NAME of (string)
   | NUM of (float)
 type tokenId = 
@@ -50,7 +57,7 @@ type tokenId =
     | TOKEN_ARROW
     | TOKEN_EQUAL
     | TOKEN_NOT
-    | TOKEN_SMALLER
+    | TOKEN_LESSER
     | TOKEN_GREATER
     | TOKEN_AND
     | TOKEN_OR
@@ -58,6 +65,13 @@ type tokenId =
     | TOKEN_FALSE
     | TOKEN_EOF
     | TOKEN_SQBRAC
+    | TOKEN_OROR
+    | TOKEN_ANDAND
+    | TOKEN_NOTEQUAL
+    | TOKEN_GREATEREQUAL
+    | TOKEN_LESSEREQUAL
+    | TOKEN_BREAK
+    | TOKEN_CONTINUE
     | TOKEN_NAME
     | TOKEN_NUM
     | TOKEN_end_of_input
