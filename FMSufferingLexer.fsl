@@ -32,8 +32,6 @@ rule tokenize = parse
 | newline       { lexbuf.EndPos <- lexbuf.EndPos.NextLine; tokenize lexbuf; }
 // deal with tokens that need to be built
 | "skip"        { SKIP }
-| "break"       { BREAK }
-| "continue"    { CONTINUE }
 | "true"        { TRUE }
 | "false"       { FALSE }
 | "->"          { ARROW }

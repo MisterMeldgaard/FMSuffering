@@ -1,6 +1,7 @@
 // This script implements our interactive FMSuffering
 
 // We need to import a couple of modules, including the generated lexer and parser
+open System.Collections.Generic
 #r "FsLexYacc.Runtime.10.0.0/lib/net46/FsLexYacc.Runtime.dll"
 open FSharp.Text.Lexing
 open System
@@ -10,59 +11,37 @@ open FMSufferingTypesAST
 open FMSufferingParser
 #load "FMSufferingLexer.fs"
 open FMSufferingLexer
+#load "FMSufferingPrettyPrinter.fs"
+open FMSufferingPrettyPrinter
+#load "FMSufferingProgramGraph.fs"
+open FMSufferingProgramGraph
 
-// We define the evaluation function recursively, by induction on the structure
-// of arithmetic expressions (AST of type expr)
-// let rec eval e =
-//   match e with
-//     | Num(x) -> x
-//     | TimesArithExpr(x,y) -> eval(x) * eval (y)
-//     | DivArithExpr(x,y) -> eval(x) / eval (y)
-//     | PlusArithExpr(x,y) -> eval(x) + eval (y)
-//     | MinusArithExpr(x,y) -> eval(x) - eval (y)
-//     | PowArithExpr(x,y) -> eval(x) ** eval (y)
-//     | UMinusArithExpr(x) -> - eval(x)
+type node = { connections: List<(edge * node)> }
+and edge = Command of command | BoolExpr of boolExpr
 
-let rec prettyPrintArith = function
-    | Num(x) -> string x
-    | GetVariable(a) -> a
-    | GetArrayItem(a,x) -> sprintf "%s[%s]" a (prettyPrintArith x)
-    | TimesArithExpr(x,y) -> sprintf "(%s * %s)" (prettyPrintArith x) (prettyPrintArith y)
-    | DivArithExpr(x,y) -> sprintf "(%s / %s)" (prettyPrintArith x) (prettyPrintArith y)
-    | PlusArithExpr(x,y) -> sprintf "(%s + %s)" (prettyPrintArith x) (prettyPrintArith y)
-    | MinusArithExpr(x,y) -> sprintf "(%s - %s)" (prettyPrintArith x) (prettyPrintArith y)
-    | PowArithExpr(x,y) -> sprintf "(%s ^ %s)" (prettyPrintArith x) (prettyPrintArith y)
-    | UMinusArithExpr(x) -> sprintf "(-%s)" (prettyPrintArith x)
+let start = { connections = new List<(edge * node)>() }
 
-and prettyPrintBool = function
-    | True -> "true"
-    | False -> "false"
-    | StrongAndExpr(x,y) -> sprintf "%s & %s" (prettyPrintBool x) (prettyPrintBool y)
-    | StrongOrExpr(x,y) -> sprintf "%s | %s" (prettyPrintBool x) (prettyPrintBool y)
-    | WeakAndExpr(x,y) -> sprintf "%s && %s" (prettyPrintBool x) (prettyPrintBool y)
-    | WeakOrExpr(x,y) -> sprintf "%s || %s" (prettyPrintBool x) (prettyPrintBool y)
-    | NotExpr(x) -> sprintf "!%s" (prettyPrintBool x)
-    | EqualExpr(x,y) -> sprintf "%s = %s" (prettyPrintArith x) (prettyPrintArith y)
-    | NotEqualExpr(x,y) -> sprintf "%s != %s" (prettyPrintArith x) (prettyPrintArith y)
-    | GreaterExpr(x,y) -> sprintf "%s > %s" (prettyPrintArith x) (prettyPrintArith y)
-    | GreaterEqualExpr(x,y) -> sprintf "%s >= %s" (prettyPrintArith x) (prettyPrintArith y)
-    | LesserExpr(x,y) -> sprintf "%s < %s" (prettyPrintArith x) (prettyPrintArith y)
-    | LesserEqualExpr(x,y) -> sprintf "%s <= %s" (prettyPrintArith x) (prettyPrintArith y)
+let rec programGraphCommand (startNode: node) (endNode: node) = function
+    | Assign(a, b) -> startNode.connections.Add(Command(Assign(a, b)), endNode)
+    | AssignArray(a, b, c) -> startNode.connections.Add(Command(AssignArray(a, b, c)), endNode)
+    | Skip -> startNode.connections.Add(Command(Skip), endNode)
+    | CommandCommand(c1, c2) -> let fresh = { connections = new List<(edge * node)>() }
+                                programGraphCommand startNode fresh c1
+                                programGraphCommand fresh endNode c2
+    | IfStatement(a) -> programGraphGuarded startNode endNode a
+    | DoStatement(a) -> programGraphGuarded startNode startNode a
+                        startNode.connections.Add(BoolExpr(pgDone a), endNode)
 
-and prettyPrintGuarded = function
-    | Condition(b, c) -> sprintf "%s -> %s" (prettyPrintBool b) (prettyPrintCommand c)
-    | Choice (gc1, gc2) -> sprintf "%s\n[] %s" (prettyPrintGuarded gc1) (prettyPrintGuarded gc2)
+and programGraphGuarded (startNode: node) (endNode: node) = function
+    | Condition(b, c) -> let fresh = { connections = new List<(edge * node)>() }
+                         programGraphCommand fresh endNode c
+                         startNode.connections.Add(BoolExpr(b), fresh)
+    | Choice (gc1, gc2) -> programGraphGuarded startNode endNode gc1
+                           programGraphGuarded startNode endNode gc2
 
-and prettyPrintCommand = function
-    | Assign(a, b) -> sprintf "%s := %s" a (prettyPrintArith b)
-    | AssignArray(a, b, c) -> sprintf "%s[%s] := %s" a (prettyPrintArith b) (prettyPrintArith c)
-    | Skip -> "skip"
-    | Break -> "break"
-    | Continue -> "continue"
-    | CommandCommand(c1, c2) -> sprintf "%s;\n%s" (prettyPrintCommand c1) (prettyPrintCommand c2)
-    | IfStatement(a) -> sprintf "if %s\nfi" (prettyPrintGuarded a)
-    | DoStatement(a) -> sprintf "do %s\nod" (prettyPrintGuarded a)
-
+and pgDone = function
+  | Condition(b, c) -> NotExpr b    
+  | Choice(gc1, gc2) -> StrongAndExpr (pgDone gc1, pgDone gc2)
 
 let parse input =
     // translate string into a buffer of characters

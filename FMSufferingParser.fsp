@@ -6,7 +6,7 @@ open FMSufferingTypesAST
 // Declare the tokens (terminal symbols)
 %token <float> NUM
 %token <string> NAME
-%token TIMES DIV PLUS MINUS POW LPAR RPAR ASSIGN SKIP SEMICOLON IF FI DO OD LBRAC RBRAC ARROW EQUAL NOT LESSER GREATER AND OR TRUE FALSE EOF SQBRAC OROR ANDAND NOTEQUAL GREATEREQUAL LESSEREQUAL BREAK CONTINUE
+%token TIMES DIV PLUS MINUS POW LPAR RPAR ASSIGN SKIP SEMICOLON IF FI DO OD LBRAC RBRAC ARROW EQUAL NOT LESSER GREATER AND OR TRUE FALSE EOF SQBRAC OROR ANDAND NOTEQUAL GREATEREQUAL LESSEREQUAL
 // NOTE: the actual formats of these tokens are defined in the lexer file
 //       as regular expressions
 
@@ -59,8 +59,6 @@ command:
   | NAME ASSIGN arithExpr0                          { Assign($1,$3) }
   | NAME LBRAC arithExpr0 RBRAC ASSIGN arithExpr0   { AssignArray($1,$3,$6) }
   | SKIP                                            { Skip }
-  | BREAK                                           { Break } //nsq
-  | CONTINUE                                        { Continue }  //nsq
   | command SEMICOLON command                       { CommandCommand($1,$3) }
   | IF guardedCommand FI                            { IfStatement($2) }
   | DO guardedCommand OD                            { DoStatement($2) }

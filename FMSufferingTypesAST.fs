@@ -42,8 +42,6 @@ and command =
   | Assign of (string * arithExpr)
   | AssignArray of (string * arithExpr * arithExpr)
   | Skip
-  | Break
-  | Continue
   | CommandCommand of (command * command)
   | IfStatement of (guardedCommand)
   | DoStatement of (guardedCommand)
