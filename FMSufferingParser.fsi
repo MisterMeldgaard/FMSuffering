@@ -33,8 +33,6 @@ type token =
   | NOTEQUAL
   | GREATEREQUAL
   | LESSEREQUAL
-  | BREAK
-  | CONTINUE
   | NAME of (string)
   | NUM of (float)
 type tokenId = 
@@ -70,8 +68,6 @@ type tokenId =
     | TOKEN_NOTEQUAL
     | TOKEN_GREATEREQUAL
     | TOKEN_LESSEREQUAL
-    | TOKEN_BREAK
-    | TOKEN_CONTINUE
     | TOKEN_NAME
     | TOKEN_NUM
     | TOKEN_end_of_input

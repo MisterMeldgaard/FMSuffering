@@ -14,17 +14,17 @@ let rec prettyPrintArith = function
 and prettyPrintBool = function
     | True -> "true"
     | False -> "false"
-    | StrongAndExpr(x,y) -> sprintf "%s & %s" (prettyPrintBool x) (prettyPrintBool y)
-    | StrongOrExpr(x,y) -> sprintf "%s | %s" (prettyPrintBool x) (prettyPrintBool y)
-    | WeakAndExpr(x,y) -> sprintf "%s && %s" (prettyPrintBool x) (prettyPrintBool y)
-    | WeakOrExpr(x,y) -> sprintf "%s || %s" (prettyPrintBool x) (prettyPrintBool y)
-    | NotExpr(x) -> sprintf "!%s" (prettyPrintBool x)
-    | EqualExpr(x,y) -> sprintf "%s = %s" (prettyPrintArith x) (prettyPrintArith y)
-    | NotEqualExpr(x,y) -> sprintf "%s != %s" (prettyPrintArith x) (prettyPrintArith y)
-    | GreaterExpr(x,y) -> sprintf "%s > %s" (prettyPrintArith x) (prettyPrintArith y)
-    | GreaterEqualExpr(x,y) -> sprintf "%s >= %s" (prettyPrintArith x) (prettyPrintArith y)
-    | LesserExpr(x,y) -> sprintf "%s < %s" (prettyPrintArith x) (prettyPrintArith y)
-    | LesserEqualExpr(x,y) -> sprintf "%s <= %s" (prettyPrintArith x) (prettyPrintArith y)
+    | StrongAndExpr(x,y) -> sprintf "(%s & %s)" (prettyPrintBool x) (prettyPrintBool y)
+    | StrongOrExpr(x,y) -> sprintf "(%s | %s)" (prettyPrintBool x) (prettyPrintBool y)
+    | WeakAndExpr(x,y) -> sprintf "(%s && %s)" (prettyPrintBool x) (prettyPrintBool y)
+    | WeakOrExpr(x,y) -> sprintf "(%s || %s)" (prettyPrintBool x) (prettyPrintBool y)
+    | NotExpr(x) -> sprintf "(!%s)" (prettyPrintBool x)
+    | EqualExpr(x,y) -> sprintf "(%s = %s)" (prettyPrintArith x) (prettyPrintArith y)
+    | NotEqualExpr(x,y) -> sprintf "(%s != %s)" (prettyPrintArith x) (prettyPrintArith y)
+    | GreaterExpr(x,y) -> sprintf "(%s > %s)" (prettyPrintArith x) (prettyPrintArith y)
+    | GreaterEqualExpr(x,y) -> sprintf "(%s >= %s)" (prettyPrintArith x) (prettyPrintArith y)
+    | LesserExpr(x,y) -> sprintf "(%s < %s)" (prettyPrintArith x) (prettyPrintArith y)
+    | LesserEqualExpr(x,y) -> sprintf "(%s <= %s)" (prettyPrintArith x) (prettyPrintArith y)
 
 and prettyPrintGuarded = function
     | Condition(b, c) -> sprintf "%s -> %s" (prettyPrintBool b) (prettyPrintCommand c)
