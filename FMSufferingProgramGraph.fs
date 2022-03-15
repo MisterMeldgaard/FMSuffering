@@ -6,12 +6,12 @@ node [shape = doublecircle]; q◀;
 node [shape = circle]\n"
 
 type node = { connections: List<(edge * node)> }
-and edge = Command of command | BoolEdge of boolExpr
+and edge = CommandEdge of command | BoolEdge of boolExpr
 
 let rec programGraphCommand (startNode: node) (endNode: node) (deterministic: bool) = function
-    | Assign(a, b) -> startNode.connections.Add(Command(Assign(a, b)), endNode)
-    | AssignArray(a, b, c) -> startNode.connections.Add(Command(AssignArray(a, b, c)), endNode)
-    | Skip -> startNode.connections.Add(Command(Skip), endNode)
+    | Assign(a, b) -> startNode.connections.Add(CommandEdge(Assign(a, b)), endNode)
+    | AssignArray(a, b, c) -> startNode.connections.Add(CommandEdge(AssignArray(a, b, c)), endNode)
+    | Skip -> startNode.connections.Add(CommandEdge(Skip), endNode)
     | CommandCommand(c1, c2) -> let fresh = { connections = new List<(edge * node)>() }
                                 programGraphCommand startNode fresh deterministic c1
                                 programGraphCommand fresh endNode deterministic c2
@@ -48,7 +48,7 @@ and pgDone = function
   | Choice(gc1, gc2) -> StrongAndExpr (pgDone gc1, pgDone gc2)
 
 let prettyPrintEdge = function
-  | Command(c) -> prettyPrintCommand c
+  | CommandEdge(c) -> prettyPrintCommand c
   | BoolEdge(b) -> prettyPrintBool b
 
 let rec visitNode acc (curEdge, curNode) node (visitedNodes: List<(string * node)>) = 
