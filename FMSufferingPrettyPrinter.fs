@@ -28,7 +28,7 @@ and prettyPrintBool = function
 
 and prettyPrintGuarded = function
     | Condition(b, c) -> sprintf "%s -> %s" (prettyPrintBool b) (prettyPrintCommand c)
-    | Choice (gc1, gc2) -> sprintf "%s\n[] %s" (prettyPrintGuarded gc1) (prettyPrintGuarded gc2)
+    | Choice(gc1, gc2) -> sprintf "%s\n[] %s" (prettyPrintGuarded gc1) (prettyPrintGuarded gc2)
 
 and prettyPrintCommand = function
     | Assign(a, b) -> sprintf "%s := %s" a (prettyPrintArith b)

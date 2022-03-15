@@ -16,45 +16,6 @@ open FMSufferingPrettyPrinter
 #load "FMSufferingProgramGraph.fs"
 open FMSufferingProgramGraph
 
-type node = { connections: List<(edge * node)> }
-and edge = Command of command | BoolExpr of boolExpr
-
-let rec programGraphCommand (startNode: node) (endNode: node) = function
-    | Assign(a, b) -> startNode.connections.Add(Command(Assign(a, b)), endNode)
-    | AssignArray(a, b, c) -> startNode.connections.Add(Command(AssignArray(a, b, c)), endNode)
-    | Skip -> startNode.connections.Add(Command(Skip), endNode)
-    | CommandCommand(c1, c2) -> let fresh = { connections = new List<(edge * node)>() }
-                                programGraphCommand startNode fresh c1
-                                programGraphCommand fresh endNode c2
-    | IfStatement(a) -> programGraphGuarded startNode endNode a
-    | DoStatement(a) -> programGraphGuarded startNode startNode a
-                        startNode.connections.Add(BoolExpr(pgDone a), endNode)
-
-and programGraphGuarded (startNode: node) (endNode: node) = function
-    | Condition(b, c) -> let fresh = { connections = new List<(edge * node)>() }
-                         programGraphCommand fresh endNode c
-                         startNode.connections.Add(BoolExpr(b), fresh)
-    | Choice (gc1, gc2) -> programGraphGuarded startNode endNode gc1
-                           programGraphGuarded startNode endNode gc2
-
-and pgDone = function
-  | Condition(b, c) -> NotExpr b    
-  | Choice(gc1, gc2) -> StrongAndExpr (pgDone gc1, pgDone gc2)
-
-let prettyPrintEdge = function
-  | Command(c) -> prettyPrintCommand c
-  | BoolExpr(b) -> prettyPrintBool b
-
-let rec graphViz (visitedNodes: 
-  List<(string * node)>) node = node.connections |> 
-                                  Seq.fold (fun acc (curEdge, curNode) -> 
-                                    let startName = fst (visitedNodes |> Seq.find (fun (_, fNode) -> fNode = node))
-                                    match (visitedNodes |> Seq.tryFind (fun (_, fNode) -> fNode = curNode)) with
-                                      | Some (curName, _) -> sprintf "%s%s -> %s [label = \"%s\"];\n" acc startName curName (prettyPrintEdge curEdge)
-                                      | None -> let curName = sprintf "q%i" ((Seq.length visitedNodes) - 1)
-                                                visitedNodes.Add(curName, curNode)
-                                                sprintf "%s%s -> %s [label = \"%s\"];\n%s" acc startName curName (prettyPrintEdge curEdge) (graphViz visitedNodes curNode)) ""
-
 let parse input =
     // translate string into a buffer of characters
     let lexbuf = LexBuffer<char>.FromString input
@@ -71,26 +32,52 @@ let rec compute n =
         // If the input starts with # (would be illegal in the language)
         // then we interpret what's after the # as a path and load code from that file.
         // Otherwise we just interpret the input as code.
-        let cons = Console.ReadLine()
-        let e =
-          if cons.StartsWith("#") then
-            parse (System.IO.File.ReadAllText cons.[1..])
-          else
-            parse cons
-        
-        
-        let startNode = { connections = new List<(edge * node)>() }
-        let endNode = { connections = new List<(edge * node)>() }
-        programGraphCommand startNode endNode e
-        let graphVizVisited = new List<(string * node)>()
-        graphVizVisited.Add("q▷", startNode)
-        graphVizVisited.Add("q◀", endNode)
-        printfn "%s" (graphViz graphVizVisited startNode)
 
-        printfn "Valid code!"
-        printfn "%s" (prettyPrintCommand e)
-        // and print the result of evaluating it
-        // printfn "Result: %f" (eval(e))
+        // #path=examples/average_array.gcl, -pg, -pp
+        // #-pg, -pp
+        // skip
+
+        let cons = Console.ReadLine()
+
+        let mutable pg = false
+        let mutable pp = false
+        let mutable ev = false
+        let mutable dt = false
+        
+        let e =
+          if cons.[0] = '#' then
+            let args = cons.[1..].Split(",") |> Array.map (fun el -> el.Trim())
+            pg <- Array.contains "pg" args //program graph
+            pp <- Array.contains "pp" args //pretty printer
+            ev <- Array.contains "ev" args //evaluator function
+            dt <- Array.contains "dt" args //determenistic
+            if args[0].StartsWith("path=") then
+              parse (System.IO.File.ReadAllText args[0].[5..])
+            else
+              parse (Console.ReadLine())
+          else
+            pg <- true
+            pp <- true
+            ev <- true
+            dt <- true
+            parse cons
+
+        printfn "Valid code!\n"
+
+        if pg then //btw these aren't errors they're features
+          printfn "Program graph:"
+          let startNode = { connections = new List<(edge * node)>() }
+          let endNode = { connections = new List<(edge * node)>() }
+          programGraphCommand startNode endNode dt e
+          let graphVizVisited = new List<(string * node)>()
+          graphVizVisited.Add("q▷", startNode)
+          graphVizVisited.Add("q◀", endNode)
+          printfn "%s\n" (pg2dot graphVizVisited startNode)
+
+        if pp then printfn "Pretty print:\n%s\n" (prettyPrintCommand e)
+
+        if ev then printfn "ev"
+        
         compute n - 1
         with
           | Failure msg -> printfn "Invalid code! Error: %s" msg; compute n - 1
