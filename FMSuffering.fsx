@@ -16,9 +16,43 @@ open FMSufferingPrettyPrinter
 #load "FMSufferingProgramGraph.fs"
 open FMSufferingProgramGraph
 
-let evalArith (arith: arithExpr) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) = 1
+type EvalStatus = Running | Stuck | Terminated
+let evalStatusToString = function
+  | Running -> "running"
+  | Stuck -> "stuck"
+  | Terminated -> "terminated"
 
-let evalBool (b: boolExpr) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) = false
+let rec evalArith (arith: arithExpr) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) : int =
+  match arith with
+  | Num(x) -> (int) x
+  | GetVariable(name) -> varMem[name]
+  | GetArrayItem(name, index) -> arrMem[name][evalArith index varMem arrMem]
+  | TimesArithExpr(a1, a2) -> (evalArith a1 varMem arrMem) * (evalArith a2 varMem arrMem)
+  | DivArithExpr(a1, a2) -> (evalArith a1 varMem arrMem) / (evalArith a2 varMem arrMem)
+  | PlusArithExpr(a1, a2) -> (evalArith a1 varMem arrMem) + (evalArith a2 varMem arrMem)
+  | MinusArithExpr(a1, a2) -> (evalArith a1 varMem arrMem) - (evalArith a2 varMem arrMem)
+  | PowArithExpr(a1, a2) -> pown (evalArith a1 varMem arrMem) (evalArith a2 varMem arrMem)
+  | UMinusArithExpr(a) -> -(evalArith a varMem arrMem)
+
+let rec evalBool (bool: boolExpr) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
+  match bool with
+  | True -> true
+  | False -> false
+  | StrongAndExpr(b1, b2) -> let b1r = evalBool b1 varMem arrMem
+                             let b2r = evalBool b2 varMem arrMem
+                             b1r && b2r
+  | StrongOrExpr(b1, b2) ->  let b1r = evalBool b1 varMem arrMem
+                             let b2r = evalBool b2 varMem arrMem
+                             b1r || b2r
+  | WeakAndExpr(b1, b2) -> (evalBool b1 varMem arrMem) && (evalBool b2 varMem arrMem)
+  | WeakOrExpr(b1, b2) -> (evalBool b1 varMem arrMem) || (evalBool b2 varMem arrMem)
+  | NotExpr(b) -> not (evalBool b varMem arrMem)
+  | EqualExpr(a1, a2) -> (evalArith a1 varMem arrMem) = (evalArith a2 varMem arrMem)
+  | NotEqualExpr(a1, a2) -> (evalArith a1 varMem arrMem) <> (evalArith a2 varMem arrMem)
+  | GreaterExpr(a1, a2) -> (evalArith a1 varMem arrMem) > (evalArith a2 varMem arrMem)
+  | GreaterEqualExpr(a1, a2) -> (evalArith a1 varMem arrMem) >= (evalArith a2 varMem arrMem)
+  | LesserExpr(a1, a2) -> (evalArith a1 varMem arrMem) < (evalArith a2 varMem arrMem)
+  | LesserEqualExpr(a1, a2) -> (evalArith a1 varMem arrMem) <= (evalArith a2 varMem arrMem)
 
 let evalCommand (command: command) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
   match command with
@@ -35,11 +69,23 @@ let rec evalConnections (connections: List<edge * node>) (varMem: Dictionary<str
     if (evalBool b varMem arrMem) then
       nextNode
     else
+      // TODO: DETECT IF STUCK
       evalConnections (connections.GetRange(1, connections.Count - 1)) varMem arrMem
 
 let evalStep (node: node) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) = evalConnections node.connections varMem arrMem
 
+let getNodeName (nodeNames: List<(string * node)>) node = fst (nodeNames |> Seq.find (fun (_, fNode) -> fNode = node))
 
+let printVarMem (varMem: Dictionary<string, int>) = Seq.fold (fun acc (KeyValue(key, value)) -> acc + (sprintf "%s=%i, " key value)) "" varMem
+let printArr (arr: List<int>) = Seq.fold (fun acc value -> acc + (sprintf "%i, " value)) "" arr
+let printArrMem (arrMem: Dictionary<string, List<int>>) = Seq.fold (fun acc (KeyValue(key, value)) -> acc + (sprintf "%s=[%s], " key (printArr value))) "" arrMem
+
+let printState (status: EvalStatus) node nodeNames varMem arrMem =
+  sprintf "Status: %s\nNode: %s\n%s\n%s"
+    (evalStatusToString status)
+    (getNodeName nodeNames node)
+    (printVarMem varMem)
+    (printArrMem arrMem)
 
 let parse input =
   // translate string into a buffer of characters
@@ -93,14 +139,15 @@ let rec compute n =
 
         let startNode = { connections = new List<(edge * node)>() }
         let endNode = { connections = new List<(edge * node)>() }
+        let nodeNames = new List<(string * node)>()
+        nodeNames.Add("q▷", startNode)
+        nodeNames.Add("q◀", endNode)
         programGraphCommand startNode endNode dt e
+        let pgString = pg2dot nodeNames startNode
 
         if pg then //btw these aren't errors they're features
           printfn "Program graph:"
-          let graphVizVisited = new List<(string * node)>()
-          graphVizVisited.Add("q▷", startNode)
-          graphVizVisited.Add("q◀", endNode)
-          printfn "%s\n" (pg2dot graphVizVisited startNode)
+          printfn "%s\n" pgString
 
         if pp then printfn "Pretty print:\n%s\n" (prettyPrintCommand e)
 
@@ -108,7 +155,7 @@ let rec compute n =
           let varMem = new Dictionary<string, int>()
           let arrMem = new Dictionary<string, List<int>>()
           let nextNode = evalStep startNode varMem arrMem
-          printfn("Eval!")
+          printfn "%s" (printState Running nextNode nodeNames varMem arrMem)
         
         compute n - 1
         with
