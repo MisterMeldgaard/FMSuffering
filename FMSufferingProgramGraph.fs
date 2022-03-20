@@ -54,12 +54,12 @@ let prettyPrintEdge = function
 let rec visitNode acc (curEdge, curNode) node (visitedNodes: List<(string * node)>) = 
   let startName = fst (visitedNodes |> Seq.find (fun (_, fNode) -> fNode = node))
   match (visitedNodes |> Seq.tryFind (fun (_, fNode) -> fNode = curNode)) with
-      | Some (curName, _) -> sprintf "%s%s -> %s [label = \"%s\"];\n" acc startName curName (prettyPrintEdge curEdge)
-      | None -> let curName = sprintf "q%i" ((Seq.length visitedNodes) - 1)
+      | Some (curName, _) -> $"{acc}{startName} -> {curName} [label = \"{prettyPrintEdge curEdge}\"];\n"
+      | None -> let curName = $"q{(Seq.length visitedNodes) - 1}"
                 visitedNodes.Add(curName, curNode)
-                sprintf "%s%s -> %s [label = \"%s\"];\n%s" acc startName curName (prettyPrintEdge curEdge) (pg2dotRec visitedNodes curNode)
+                $"{acc}{startName} -> {curName} [label = \"{prettyPrintEdge curEdge}\"];\n{pg2dotRec visitedNodes curNode}"
 
 and pg2dotRec (visitedNodes: 
   List<(string * node)>) node = node.connections |> Seq.fold (fun acc el -> visitNode acc el node visitedNodes) ""
 
-let pg2dot (visitedNodes: List<(string * node)>) node = sprintf "%s%s}" dotPrefix (pg2dotRec visitedNodes node)
+let pg2dot (visitedNodes: List<(string * node)>) node = $"{dotPrefix}{pg2dotRec visitedNodes node}}}"

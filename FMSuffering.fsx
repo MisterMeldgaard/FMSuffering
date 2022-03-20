@@ -76,16 +76,26 @@ let evalStep (node: node) (varMem: Dictionary<string, int>) (arrMem: Dictionary<
 
 let getNodeName (nodeNames: List<(string * node)>) node = fst (nodeNames |> Seq.find (fun (_, fNode) -> fNode = node))
 
-let printVarMem (varMem: Dictionary<string, int>) = Seq.fold (fun acc (KeyValue(key, value)) -> acc + (sprintf "%s=%i, " key value)) "" varMem
-let printArr (arr: List<int>) = Seq.fold (fun acc value -> acc + (sprintf "%i, " value)) "" arr
-let printArrMem (arrMem: Dictionary<string, List<int>>) = Seq.fold (fun acc (KeyValue(key, value)) -> acc + (sprintf "%s=[%s], " key (printArr value))) "" arrMem
+let printVarMem (varMem: Dictionary<string, int>) = Seq.fold (fun acc (KeyValue(key, value)) -> $"{acc}{key}={value}, ") "" varMem
+let printArr (arr: List<int>) = Seq.fold (fun acc value -> $"{acc}{value}, ") "" arr
+let printArrMem (arrMem: Dictionary<string, List<int>>) = Seq.fold (fun acc (KeyValue(key, value)) -> $"{acc}{key}=[{printArr value}], ") "" arrMem
 
 let printState (status: EvalStatus) node nodeNames varMem arrMem =
-  sprintf "Status: %s\nNode: %s\n%s\n%s"
-    (evalStatusToString status)
-    (getNodeName nodeNames node)
-    (printVarMem varMem)
-    (printArrMem arrMem)
+  $"Status: {evalStatusToString status}\nNode: {getNodeName nodeNames node}\n{printVarMem varMem}\n{printArrMem arrMem}"
+
+let readArray (values: string) =
+  new List<int>(
+    values.Split "," |>
+    Array.map (fun el -> int el))
+
+// Memory is expected to be in the same format as the way you type it into the field on FM4Fun
+let readMemory (str: string) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
+  str.Split "," |>
+  Array.map (fun el -> el.Trim().Split "=") |>
+  Array.iter (fun el -> if el[1].[0] = '[' then 
+                          arrMem.Add(el[0].Trim(), readArray el[1])
+                        else
+                          varMem.Add(el[0].Trim(), int el[1]))
 
 let parse input =
   // translate string into a buffer of characters
@@ -154,6 +164,8 @@ let rec compute n =
         if ev then
           let varMem = new Dictionary<string, int>()
           let arrMem = new Dictionary<string, List<int>>()
+          printf "Enter program memory: "
+          readMemory (Console.ReadLine()) varMem arrMem
           let nextNode = evalStep startNode varMem arrMem
           printfn "%s" (printState Running nextNode nodeNames varMem arrMem)
         
