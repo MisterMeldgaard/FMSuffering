@@ -15,6 +15,7 @@ open FMSufferingLexer
 open FMSufferingPrettyPrinter
 #load "FMSufferingProgramGraph.fs"
 open FMSufferingProgramGraph
+open System.Text.RegularExpressions
 
 type EvalStatus = Running | Stuck | Terminated
 let evalStatusToString = function
@@ -64,28 +65,41 @@ let rec evalConnections (connections: List<edge * node>) (varMem: Dictionary<str
   match connections[0] with
   | (CommandEdge command, nextNode) ->
     evalCommand command varMem arrMem
-    nextNode
+    Some(nextNode)
   | (BoolEdge b, nextNode) ->
     if (evalBool b varMem arrMem) then
-      nextNode
+      Some(nextNode)
     else
-      // TODO: DETECT IF STUCK
-      evalConnections (connections.GetRange(1, connections.Count - 1)) varMem arrMem
+      if connections.Count = 1 then
+        None
+      else
+        evalConnections (connections.GetRange(1, connections.Count - 1)) varMem arrMem
 
 let evalStep (node: node) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) = evalConnections node.connections varMem arrMem
 
 let getNodeName (nodeNames: List<(string * node)>) node = fst (nodeNames |> Seq.find (fun (_, fNode) -> fNode = node))
 
-let printVarMem (varMem: Dictionary<string, int>) = Seq.fold (fun acc (KeyValue(key, value)) -> $"{acc}{key}={value}, ") "" varMem
-let printArr (arr: List<int>) = Seq.fold (fun acc value -> $"{acc}{value}, ") "" arr
-let printArrMem (arrMem: Dictionary<string, List<int>>) = Seq.fold (fun acc (KeyValue(key, value)) -> $"{acc}{key}=[{printArr value}], ") "" arrMem
+
+
+let printVarMem (varMem: Dictionary<string, int>) =
+  Regex.Replace(
+    Seq.fold (fun acc (KeyValue(key, value)) -> $"{acc}{key}={value}, ") "" varMem,
+    ", $",
+    "")
+let printArr (arr: List<int>) = String.Join("; ", arr)
+let printArrMem (arrMem: Dictionary<string, List<int>>) =
+  Regex.Replace(
+    Seq.fold (fun acc (KeyValue(key, value)) -> $"{acc}{key}=[{printArr value}], ") "" arrMem,
+    ", $",
+    "")
 
 let printState (status: EvalStatus) node nodeNames varMem arrMem =
   $"Status: {evalStatusToString status}\nNode: {getNodeName nodeNames node}\n{printVarMem varMem}\n{printArrMem arrMem}"
 
+// 1,2,3,4 - [1,2,3,4]
 let readArray (values: string) =
   new List<int>(
-    values.Split "," |>
+    values.Split ";" |>
     Array.map (fun el -> int el))
 
 // Memory is expected to be in the same format as the way you type it into the field on FM4Fun
@@ -93,9 +107,26 @@ let readMemory (str: string) (varMem: Dictionary<string, int>) (arrMem: Dictiona
   str.Split "," |>
   Array.map (fun el -> el.Trim().Split "=") |>
   Array.iter (fun el -> if el[1].[0] = '[' then 
-                          arrMem.Add(el[0].Trim(), readArray el[1])
+                          arrMem.Add(el[0].Trim(), readArray (Regex.Replace(el[1], "\[|\]", "")))
                         else
                           varMem.Add(el[0].Trim(), int el[1]))
+
+let rec stepProgram node endNode cap (nodeNames: List<(string * node)>) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
+  if cap = 0 then
+    printfn $"{printState Running node nodeNames varMem arrMem}"
+    printf "Run additional steps: "
+    let addSteps = int (Console.ReadLine())
+    stepProgram node endNode addSteps nodeNames varMem arrMem
+  else
+    let nextNode = evalStep node varMem arrMem
+    match nextNode with
+    | Some(n) ->
+      if n = endNode then
+        printfn $"{printState Terminated n nodeNames varMem arrMem}"
+      else
+        stepProgram n endNode (cap - 1) nodeNames varMem arrMem
+    | None -> printfn $"{printState Stuck node nodeNames varMem arrMem}"
+  
 
 let parse input =
   // translate string into a buffer of characters
@@ -165,9 +196,12 @@ let rec compute n =
           let varMem = new Dictionary<string, int>()
           let arrMem = new Dictionary<string, List<int>>()
           printf "Enter program memory: "
-          readMemory (Console.ReadLine()) varMem arrMem
-          let nextNode = evalStep startNode varMem arrMem
-          printfn "%s" (printState Running nextNode nodeNames varMem arrMem)
+          let mem = Console.ReadLine()
+          if not (String.IsNullOrWhiteSpace(mem)) then
+            readMemory mem varMem arrMem
+          printf "Number of steps: "
+          let steps = int (Console.ReadLine())
+          stepProgram startNode endNode steps nodeNames varMem arrMem
         
         compute n - 1
         with
