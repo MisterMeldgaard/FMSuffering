@@ -8,7 +8,11 @@
 // to store represent arithExpr ArithExpr expressions
 module FMSufferingTypesAST
 
-type arithExpr =
+type parserReturnType = 
+  | RCommand of command
+  | RBoolExpr of boolExpr
+
+and arithExpr =
   | Num of float
   | GetVariable of string
   | GetArrayItem of (string * arithExpr)

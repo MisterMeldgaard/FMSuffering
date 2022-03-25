@@ -15,118 +15,95 @@ open FMSufferingLexer
 open FMSufferingPrettyPrinter
 #load "FMSufferingProgramGraph.fs"
 open FMSufferingProgramGraph
-open System.Text.RegularExpressions
+#load "FMSufferingEval.fs"
+open FMSufferingEval
 
-type EvalStatus = Running | Stuck | Terminated
-let evalStatusToString = function
-  | Running -> "running"
-  | Stuck -> "stuck"
-  | Terminated -> "terminated"
+type S = node * List<edge> * node
 
-let rec evalArith (arith: arithExpr) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) : int =
-  match arith with
-  | Num(x) -> (int) x
-  | GetVariable(name) -> varMem[name]
-  | GetArrayItem(name, index) -> arrMem[name][evalArith index varMem arrMem]
-  | TimesArithExpr(a1, a2) -> (evalArith a1 varMem arrMem) * (evalArith a2 varMem arrMem)
-  | DivArithExpr(a1, a2) -> (evalArith a1 varMem arrMem) / (evalArith a2 varMem arrMem)
-  | PlusArithExpr(a1, a2) -> (evalArith a1 varMem arrMem) + (evalArith a2 varMem arrMem)
-  | MinusArithExpr(a1, a2) -> (evalArith a1 varMem arrMem) - (evalArith a2 varMem arrMem)
-  | PowArithExpr(a1, a2) -> pown (evalArith a1 varMem arrMem) (evalArith a2 varMem arrMem)
-  | UMinusArithExpr(a) -> -(evalArith a varMem arrMem)
-
-let rec evalBool (bool: boolExpr) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
-  match bool with
-  | True -> true
-  | False -> false
-  | StrongAndExpr(b1, b2) -> let b1r = evalBool b1 varMem arrMem
-                             let b2r = evalBool b2 varMem arrMem
-                             b1r && b2r
-  | StrongOrExpr(b1, b2) ->  let b1r = evalBool b1 varMem arrMem
-                             let b2r = evalBool b2 varMem arrMem
-                             b1r || b2r
-  | WeakAndExpr(b1, b2) -> (evalBool b1 varMem arrMem) && (evalBool b2 varMem arrMem)
-  | WeakOrExpr(b1, b2) -> (evalBool b1 varMem arrMem) || (evalBool b2 varMem arrMem)
-  | NotExpr(b) -> not (evalBool b varMem arrMem)
-  | EqualExpr(a1, a2) -> (evalArith a1 varMem arrMem) = (evalArith a2 varMem arrMem)
-  | NotEqualExpr(a1, a2) -> (evalArith a1 varMem arrMem) <> (evalArith a2 varMem arrMem)
-  | GreaterExpr(a1, a2) -> (evalArith a1 varMem arrMem) > (evalArith a2 varMem arrMem)
-  | GreaterEqualExpr(a1, a2) -> (evalArith a1 varMem arrMem) >= (evalArith a2 varMem arrMem)
-  | LesserExpr(a1, a2) -> (evalArith a1 varMem arrMem) < (evalArith a2 varMem arrMem)
-  | LesserEqualExpr(a1, a2) -> (evalArith a1 varMem arrMem) <= (evalArith a2 varMem arrMem)
-
-let evalCommand (command: command) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
-  match command with
-  | Assign(varName, value) -> varMem[varName] <- (evalArith value varMem arrMem)
-  | AssignArray(arrName, index, value) -> arrMem[arrName][(evalArith index varMem arrMem)] <- (evalArith value varMem arrMem)
-  | Skip -> ()
-
-let rec evalConnections (connections: List<edge * node>) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
-  match connections[0] with
-  | (CommandEdge command, nextNode) ->
-    evalCommand command varMem arrMem
-    Some(nextNode)
-  | (BoolEdge b, nextNode) ->
-    if (evalBool b varMem arrMem) then
-      Some(nextNode)
+let rec walk (predicateNodes: List<node>) (spfs: List<S>) (startNode: node) (actions: List<edge>) (currentNode: node) =
+  Seq.iter (fun connection ->
+    let newActions = new List<edge>(actions)
+    newActions.Add(fst connection)
+    if predicateNodes.Contains(snd connection) then
+      spfs.Add((startNode, newActions, snd connection))
     else
-      if connections.Count = 1 then
-        None
-      else
-        evalConnections (connections.GetRange(1, connections.Count - 1)) varMem arrMem
+      walk predicateNodes spfs startNode newActions (snd connection)
+  ) currentNode.connections
 
-let evalStep (node: node) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) = evalConnections node.connections varMem arrMem
-
-let getNodeName (nodeNames: List<(string * node)>) node = fst (nodeNames |> Seq.find (fun (_, fNode) -> fNode = node))
+let buildSPF (predicateNodes: List<node>) (spfs: List<S>) =
+  Seq.iter (fun n -> walk predicateNodes spfs n (new List<edge>()) n) predicateNodes
 
 
+// Replace instances of varname with value in the predicate
+let rec replaceAssignBool (varName: string) (value: arithExpr) (predicate: boolExpr) =
+  match predicate with
+  | True -> True
+  | False -> False
+  | StrongAndExpr(b1, b2) -> StrongAndExpr (replaceAssignBool varName value b1, replaceAssignBool varName value b2)
+  | StrongOrExpr(b1, b2) ->  StrongOrExpr (replaceAssignBool varName value b1, replaceAssignBool varName value b2)
+  | WeakAndExpr(b1, b2) -> WeakAndExpr (replaceAssignBool varName value b1, replaceAssignBool varName value b2)
+  | WeakOrExpr(b1, b2) -> WeakOrExpr (replaceAssignBool varName value b1, replaceAssignBool varName value b2)
+  | NotExpr(b) -> NotExpr (replaceAssignBool varName value b) 
+  | EqualExpr(a1, a2) -> EqualExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+  | NotEqualExpr(a1, a2) -> NotEqualExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+  | GreaterExpr(a1, a2) -> GreaterExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+  | GreaterEqualExpr(a1, a2) -> GreaterEqualExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+  | LesserExpr(a1, a2) -> LesserExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+  | LesserEqualExpr(a1, a2) -> LesserEqualExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
 
-let printVarMem (varMem: Dictionary<string, int>) =
-  Regex.Replace(
-    Seq.fold (fun acc (KeyValue(key, value)) -> $"{acc}{key}={value}, ") "" varMem,
-    ", $",
-    "")
-let printArr (arr: List<int>) = String.Join("; ", arr)
-let printArrMem (arrMem: Dictionary<string, List<int>>) =
-  Regex.Replace(
-    Seq.fold (fun acc (KeyValue(key, value)) -> $"{acc}{key}=[{printArr value}], ") "" arrMem,
-    ", $",
-    "")
+and replaceAssignArith (varName: string) (value: arithExpr) (predicate: arithExpr) =
+  match predicate with
+  | Num(x) -> Num(x)
+  | GetVariable(name) -> if name = varName then value else GetVariable(name)
+  | GetArrayItem(name, index) -> GetArrayItem(name, index)
+  | TimesArithExpr(a1, a2) -> TimesArithExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+  | DivArithExpr(a1, a2) -> DivArithExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+  | PlusArithExpr(a1, a2) -> PlusArithExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+  | MinusArithExpr(a1, a2) -> MinusArithExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+  | PowArithExpr(a1, a2) -> PowArithExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+  | UMinusArithExpr(a) -> UMinusArithExpr (replaceAssignArith varName value a)
 
-let printState (status: EvalStatus) node nodeNames varMem arrMem =
-  $"Status: {evalStatusToString status}\nNode: {getNodeName nodeNames node}\n{printVarMem varMem}\n{printArrMem arrMem}"
+// Replace instances of arrName[index] with value
+let rec replaceAssignArrayBool (varName: string) (index: arithExpr) (value: arithExpr) (predicate: boolExpr) =
+  match predicate with
+  | True -> True
+  | False -> False
+  | StrongAndExpr(b1, b2) -> StrongAndExpr (replaceAssignArrayBool varName index value b1, replaceAssignArrayBool varName index value b2)
+  | StrongOrExpr(b1, b2) ->  StrongOrExpr (replaceAssignArrayBool varName index value b1, replaceAssignArrayBool varName index value b2)
+  | WeakAndExpr(b1, b2) -> WeakAndExpr (replaceAssignArrayBool varName index value b1, replaceAssignArrayBool varName index value b2)
+  | WeakOrExpr(b1, b2) -> WeakOrExpr (replaceAssignArrayBool varName index value b1, replaceAssignArrayBool varName index value b2)
+  | NotExpr(b) -> NotExpr (replaceAssignArrayBool varName index value b) 
+  | EqualExpr(a1, a2) -> EqualExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+  | NotEqualExpr(a1, a2) -> NotEqualExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+  | GreaterExpr(a1, a2) -> GreaterExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+  | GreaterEqualExpr(a1, a2) -> GreaterEqualExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+  | LesserExpr(a1, a2) -> LesserExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+  | LesserEqualExpr(a1, a2) -> LesserEqualExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
 
-// 1,2,3,4 - [1,2,3,4]
-let readArray (values: string) =
-  new List<int>(
-    values.Split ";" |>
-    Array.map (fun el -> int el))
+and replaceAssignArrayArith (varName: string) (index: arithExpr) (value: arithExpr) (predicate: arithExpr) =
+  match predicate with
+  | Num(x) -> Num(x)
+  | GetVariable(name) -> GetVariable(name)
+  | GetArrayItem(name, aIndex) -> if name = varName && index.Equals(aIndex) then value else GetArrayItem(name, aIndex) // a + b == b + a
+  | TimesArithExpr(a1, a2) -> TimesArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+  | DivArithExpr(a1, a2) -> DivArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+  | PlusArithExpr(a1, a2) -> PlusArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+  | MinusArithExpr(a1, a2) -> MinusArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+  | PowArithExpr(a1, a2) -> PowArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+  | UMinusArithExpr(a) -> UMinusArithExpr (replaceAssignArrayArith varName index value a)
 
-// Memory is expected to be in the same format as the way you type it into the field on FM4Fun
-let readMemory (str: string) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
-  str.Split "," |>
-  Array.map (fun el -> el.Trim().Split "=") |>
-  Array.iter (fun el -> if el[1].[0] = '[' then 
-                          arrMem.Add(el[0].Trim(), readArray (Regex.Replace(el[1], "\[|\]", "")))
-                        else
-                          varMem.Add(el[0].Trim(), int el[1]))
+let bottomsUp ((sn, acts, en): S) (predicate: boolExpr) =
+  List.fold (fun acc act -> 
+    match act with
+    | CommandEdge c ->
+      match c with
+      | Assign(varName, value) -> replaceAssignBool (varName) (value) (acc)
+      | AssignArray(arrName, index, value) -> replaceAssignArrayBool (arrName) (index) (value) (acc) 
+      | Skip -> acc
+    | BoolEdge b -> // If the expression exists in the predicate then remove it
+  ) predicate (List.rev (Seq.toList acts))
 
-let rec stepProgram node endNode cap (nodeNames: List<(string * node)>) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
-  if cap = 0 then
-    printfn $"{printState Running node nodeNames varMem arrMem}"
-    printf "Run additional steps: "
-    let addSteps = int (Console.ReadLine())
-    stepProgram node endNode addSteps nodeNames varMem arrMem
-  else
-    let nextNode = evalStep node varMem arrMem
-    match nextNode with
-    | Some(n) ->
-      if n = endNode then
-        printfn $"{printState Terminated n nodeNames varMem arrMem}"
-      else
-        stepProgram n endNode (cap - 1) nodeNames varMem arrMem
-    | None -> printfn $"{printState Stuck node nodeNames varMem arrMem}"
-  
+// TODO: Build custom equality checker for arithmetic and boolean expressions
 
 let parse input =
   // translate string into a buffer of characters
@@ -157,6 +134,7 @@ let rec compute n =
         let mutable pp = false
         let mutable ev = false
         let mutable dt = false
+        let mutable pv = false
         
         let e =
           if cons.[0] = '#' then
@@ -165,6 +143,7 @@ let rec compute n =
             pp <- Array.contains "pp" args //pretty printer
             ev <- Array.contains "ev" args //evaluator function
             dt <- Array.contains "dt" args //determenistic
+            pv <- Array.contains "pv" args //program validation
             if args[0].StartsWith("path=") then
               parse (System.IO.File.ReadAllText args[0].[5..])
             else
@@ -174,7 +153,12 @@ let rec compute n =
             pp <- true
             ev <- true
             dt <- true
+            pv <- true
             parse cons
+
+        let c = match e with
+                | RCommand c -> c
+                | RBoolExpr _ -> failwith "Program cannot start with a boolean expression!"
 
         printfn "Valid code!\n"
 
@@ -183,14 +167,17 @@ let rec compute n =
         let nodeNames = new List<(string * node)>()
         nodeNames.Add("q▷", startNode)
         nodeNames.Add("q◀", endNode)
-        programGraphCommand startNode endNode dt e
+        let loopNodes = new List<node>()
+        loopNodes.Add(startNode)
+        programGraphCommand startNode endNode dt loopNodes c
+        loopNodes.Add(endNode)
         let pgString = pg2dot nodeNames startNode
 
         if pg then //btw these aren't errors they're features
           printfn "Program graph:"
           printfn "%s\n" pgString
 
-        if pp then printfn "Pretty print:\n%s\n" (prettyPrintCommand e)
+        if pp then printfn "Pretty print:\n%s\n" (prettyPrintCommand c)
 
         if ev then
           let varMem = new Dictionary<string, int>()
@@ -203,6 +190,27 @@ let rec compute n =
           let steps = int (Console.ReadLine())
           stepProgram startNode endNode steps nodeNames varMem arrMem
         
+        if pv then
+          let predicates = new List<boolExpr>()
+          printfn "Enter predicate assignments"
+          Seq.iter (fun lnode ->
+            printf $"P({getNodeName nodeNames lnode}): "
+            let line = parse (Console.ReadLine())
+            let predicate = match line with
+                            | RCommand _ -> failwith "Predicate must be a boolean expression!"
+                            | RBoolExpr b -> b
+            predicates.Add(predicate)
+          ) loopNodes
+
+          let spfs = new List<S>()
+          buildSPF loopNodes spfs
+
+          printfn "%A" (Seq.map (getNodeName nodeNames) loopNodes)
+          printfn "%A" (Seq.map prettyPrintBool predicates)
+          printfn "%A" (Seq.map (fun (sn, acts, en) ->
+            let sActs = String.Join("   ", (Seq.map prettyPrintEdge acts))
+            $"{getNodeName nodeNames sn} - {sActs} - {getNodeName nodeNames en}") spfs)
+
         compute n - 1
         with
           | Failure msg -> printfn "Invalid code! Error: %s" msg; compute n - 1

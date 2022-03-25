@@ -21,7 +21,7 @@ open FMSufferingTypesAST
 %start start
 
 // We specify the return type of each of then non-terminal symbols
-%type <command> start
+%type <parserReturnType> start
 %type <command> command
 %type <guardedCommand> guardedCommand
 %type <arithExpr> arithExpr0
@@ -39,7 +39,9 @@ open FMSufferingTypesAST
 // The first production in "formal" notation is
 // start -> expression
 // here written:
-start: command EOF             { $1 }
+start: 
+  | command EOF             { RCommand($1) }
+  | boolExpr0 EOF           { RBoolExpr($1) }
 
 // Note that we need to insert an End-Of-File (EOF)
 // The code annotation { $1 } specifies that parsing with this production
