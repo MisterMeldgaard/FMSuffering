@@ -92,7 +92,29 @@ and replaceAssignArrayArith (varName: string) (index: arithExpr) (value: arithEx
   | PowArithExpr(a1, a2) -> PowArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
   | UMinusArithExpr(a) -> UMinusArithExpr (replaceAssignArrayArith varName index value a)
 
-let bottomsUp ((sn, acts, en): S) (predicate: boolExpr) =
+let rec removeBoolExpr (be: boolExpr) (predicate: boolExpr) =
+  match predicate with
+  // | StrongAndExpr(b1, b2) -> StrongAndExpr (removeBoolExpr be b1, if be.Equals(b2) then True else b2)
+  | StrongAndExpr(b1, b2) ->
+    if be.Equals(b2) then
+      removeBoolExpr be b1
+    else if be.Equals(b1) then 
+      b2
+    else
+      StrongAndExpr (removeBoolExpr be b1, b2)
+  | WeakAndExpr(b1, b2) ->
+    if be.Equals(b2) then
+      removeBoolExpr be b1
+    else if be.Equals(b1) then 
+      b2
+    else
+      WeakAndExpr (removeBoolExpr be b1, b2)
+  | _ -> if be.Equals(predicate) then True else predicate
+
+// b = 3
+// y = 2 & b = 3 & (a = 5 | b = 3)
+
+let bottomsUp (acts: List<edge>) (predicate: boolExpr) =
   List.fold (fun acc act -> 
     match act with
     | CommandEdge c ->
@@ -100,7 +122,7 @@ let bottomsUp ((sn, acts, en): S) (predicate: boolExpr) =
       | Assign(varName, value) -> replaceAssignBool (varName) (value) (acc)
       | AssignArray(arrName, index, value) -> replaceAssignArrayBool (arrName) (index) (value) (acc) 
       | Skip -> acc
-    | BoolEdge b -> // If the expression exists in the predicate then remove it
+    | BoolEdge b -> removeBoolExpr b acc
   ) predicate (List.rev (Seq.toList acts))
 
 // TODO: Build custom equality checker for arithmetic and boolean expressions
@@ -204,6 +226,10 @@ let rec compute n =
 
           let spfs = new List<S>()
           buildSPF loopNodes spfs
+
+          Seq.iter (fun ((sn, acts, en): S) ->
+            printfn $"{prettyPrintBool predicates[loopNodes.IndexOf(sn)]} => {prettyPrintBool (bottomsUp acts (predicates[loopNodes.IndexOf(en)]))}"
+          ) spfs
 
           printfn "%A" (Seq.map (getNodeName nodeNames) loopNodes)
           printfn "%A" (Seq.map prettyPrintBool predicates)
