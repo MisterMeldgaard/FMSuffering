@@ -228,7 +228,7 @@ let rec compute n =
           buildSPF loopNodes spfs
 
           Seq.iter (fun ((sn, acts, en): S) ->
-            printfn $"{prettyPrintBool predicates[loopNodes.IndexOf(sn)]} => {prettyPrintBool (bottomsUp acts (predicates[loopNodes.IndexOf(en)]))}"
+            printfn $"From {getNodeName nodeNames sn} to {getNodeName nodeNames en}: {prettyPrintBool predicates[loopNodes.IndexOf(sn)]} => {prettyPrintBool (bottomsUp acts (predicates[loopNodes.IndexOf(en)]))}"
           ) spfs
 
           printfn "%A" (Seq.map (getNodeName nodeNames) loopNodes)

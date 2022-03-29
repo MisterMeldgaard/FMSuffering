@@ -62,7 +62,7 @@ let rec evalConnections (connections: List<edge * node>) (varMem: Dictionary<str
 
 let evalStep (node: node) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) = evalConnections node.connections varMem arrMem
 
-let getNodeName (nodeNames: List<(string * node)>) node = fst (nodeNames |> Seq.find (fun (_, fNode) -> fNode = node))
+let getNodeName (nodeNames: List<(string * node)>) (node: node) = fst (nodeNames |> Seq.find (fun (_, fNode) -> fNode = node))
 
 let printVarMem (varMem: Dictionary<string, int>) =
   Regex.Replace(

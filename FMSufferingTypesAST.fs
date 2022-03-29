@@ -23,44 +23,26 @@ type arithExpr =
   override this.Equals other =
     match other with
     | :? arithExpr as aOther ->
-      match aOther with
-      | Num(o) ->
-        match this with
-        | Num(t) -> o = t
-        | _ -> false
-      | GetVariable(o) ->
-        match this with
-        | GetVariable(t) -> o = t
-        | _ -> false
-      | GetArrayItem(o1, o2) ->
-        match this with
-        | GetArrayItem(t1, t2) -> o1 = t1 && o2.Equals(t2)
-        | _ -> false
-      | TimesArithExpr(o1, o2) ->
-        match this with
-        | TimesArithExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
-        | _ -> false
-      | DivArithExpr(o1, o2) ->
-        match this with
-        | DivArithExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2)
-        | _ -> false
-      | PlusArithExpr(o1, o2) ->
-        match this with
-        | PlusArithExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
-        | _ -> false
-      | MinusArithExpr(o1, o2) ->
-        match this with
-        | MinusArithExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2)
-        | _ -> false
-      | PowArithExpr(o1, o2) ->
-        match this with
-        | PowArithExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2)
-        | _ -> false
-      | UMinusArithExpr(o) ->
-        match this with
-        | UMinusArithExpr(t) -> o.Equals(t)
-        | _ -> false
-      
+      match (aOther, this) with
+      | (Num o, Num t) ->
+          o = t
+      | (GetVariable o, GetVariable t) ->
+          o = t
+      | (GetArrayItem (o1, o2), GetArrayItem (t1, t2)) ->
+          o1 = t1 && o2.Equals(t2)
+      | (TimesArithExpr (o1, o2), TimesArithExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
+      | (DivArithExpr (o1, o2), DivArithExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2)
+      | (PlusArithExpr (o1, o2), PlusArithExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
+      | (MinusArithExpr (o1, o2), MinusArithExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2)
+      | (PowArithExpr (o1, o2), PowArithExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2)
+      | (UMinusArithExpr o, UMinusArithExpr t) ->
+          o.Equals(t)
+      | _ -> false
     | _ -> false
 
 [<CustomEquality; NoComparison>]
@@ -82,53 +64,34 @@ type boolExpr =
   override this.Equals other =
     match other with
     | :? boolExpr as bOther ->
-      match bOther with
-      | True -> this = True
-      | False -> this = False
-      | StrongAndExpr(o1, o2) ->
-        match this with
-        | StrongAndExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
-        | _ -> false
-      | StrongOrExpr(o1, o2) -> 
-        match this with
-        | StrongOrExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
-        | _ -> false
-      | WeakAndExpr(o1, o2) ->
-        match this with
-        | WeakAndExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2)
-        | _ -> false
-      | WeakOrExpr(o1, o2) ->
-        match this with
-        | WeakOrExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2)
-        | _ -> false
-      | NotExpr(o) ->
-        match this with
-        | NotExpr(t) -> t.Equals(o)
-        | _ -> false
-      | EqualExpr(o1, o2) ->
-        match this with
-        | EqualExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
-        | _ -> false
-      | NotEqualExpr(o1, o2) ->
-        match this with
-        | NotEqualExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
-        | _ -> false
-      | GreaterExpr(o1, o2) ->
-        match this with
-        | GreaterExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2)
-        | _ -> false
-      | GreaterEqualExpr(o1, o2) ->
-        match this with
-        | GreaterEqualExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2) 
-        | _ -> false
-      | LesserExpr(o1, o2) ->
-        match this with
-        | LesserExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2) 
-        | _ -> false
-      | LesserEqualExpr(o1, o2) ->
-        match this with
-        | LesserEqualExpr(t1, t2) -> t1.Equals(o1) && t2.Equals(o2) 
-        | _ -> false
+      match (bOther, this) with
+      | (True, True) ->
+          true
+      | (False, False) ->
+          true
+      | (StrongAndExpr (o1, o2), StrongAndExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
+      | (StrongOrExpr (o1, o2), StrongOrExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
+      | (WeakAndExpr (o1, o2), WeakAndExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2)
+      | (WeakOrExpr (o1, o2), WeakOrExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2)
+      | (NotExpr o, NotExpr t) ->
+          t.Equals(o)
+      | (EqualExpr (o1, o2), EqualExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
+      | (NotEqualExpr (o1, o2), NotEqualExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2) || t1.Equals(o2) && t2.Equals(o1)
+      | (GreaterExpr (o1, o2), GreaterExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2)
+      | (GreaterEqualExpr (o1, o2), GreaterEqualExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2)
+      | (LesserExpr (o1, o2), LesserExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2)
+      | (LesserEqualExpr (o1, o2), LesserEqualExpr (t1, t2)) ->
+          t1.Equals(o1) && t2.Equals(o2)
+      | _ -> false
     | _ -> false
 
 type guardedCommand =
