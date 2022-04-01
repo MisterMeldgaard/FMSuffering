@@ -1,0 +1,19 @@
+l := 0;
+r := n;
+
+do l != r ->
+    if r >= l ->
+        mid := l + (r - l) / 2;
+        if A[mid] = x ->
+            l := mid;
+            r := mid
+        [] A[mid] > x ->
+            r := mid - 1
+        [] A[mid] < x ->
+            l := mid + 1
+        fi
+    [] r < l ->
+        r := -1;
+        l := -1
+    fi
+od
