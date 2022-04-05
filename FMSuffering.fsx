@@ -17,101 +17,84 @@ open FMSufferingPrettyPrinter
 open FMSufferingProgramGraph
 #load "FMSufferingEval.fs"
 open FMSufferingEval
+#load "FMSufferingVerification.fs"
+open FMSufferingVerification
 
-type S = node * List<edge> * node
+open System.Text.RegularExpressions
 
-let rec walk (predicateNodes: List<node>) (spfs: List<S>) (startNode: node) (actions: List<edge>) (currentNode: node) =
-  Seq.iter (fun connection ->
-    let newActions = new List<edge>(actions)
-    newActions.Add(fst connection)
-    if predicateNodes.Contains(snd connection) then
-      spfs.Add((startNode, newActions, snd connection))
+type Sign = Negative | Zero | Positive
+
+type SignConf = { vars: Dictionary<string, Sign>; arrs: Dictionary<string, Set<Sign>> }
+
+let signFromString = function
+  | "+" -> Positive
+  | "-" -> Negative
+  | "0" -> Zero
+  | _ -> failwith "Invalid sign"
+
+let readSignsArray (values: string) =
+  new Set<Sign>(
+    values.Split ";" |>
+    Array.map (fun el -> signFromString (el.Trim())))
+
+// let readSigns (str: string) (varSigns: Dictionary<node, Dictionary<string, Sign>>) (arrSigns: Dictionary<node, Dictionary<string, Set<Sign>>>) (startNode: node) = 
+let readSigns (str: string) (signMem: Dictionary<node, List<SignConf>>) (startNode: node) =
+  // Create new empty conf
+  let conf = { vars = new Dictionary<string, Sign>(); arrs = new Dictionary<string, Set<Sign>>() }
+
+  // Populate conf from the input string
+  str.Split "," |>
+  Array.map (fun el -> trimAll (el.Trim().Split "=")) |>
+  Array.iter (fun el ->
+    if el[1].[0] = '[' then
+      conf.arrs[el[0]] <- readSignsArray (Regex.Replace(el[1], "\[|\]", ""))
     else
-      walk predicateNodes spfs startNode newActions (snd connection)
-  ) currentNode.connections
+      conf.vars[el[0]] <- signFromString (el[1]))
+  
+  // Add the populated conf - if nothing is on node initialize first
+  if not (signMem.ContainsKey(startNode)) then
+    signMem.Add(startNode, new List<SignConf>())
+  signMem[startNode].Add(conf)
 
-let buildSPF (predicateNodes: List<node>) (spfs: List<S>) =
-  Seq.iter (fun n -> walk predicateNodes spfs n (new List<edge>()) n) predicateNodes
+let sortedMem (dic: Dictionary<string, 'a>) =
+  Seq.sortBy (fun (KeyValue(k, v)) -> k) dic
 
+let printSign = function
+  | Negative -> "-"
+  | Zero -> "0"
+  | Positive -> "+"
 
-// Replace instances of varname with value in the predicate
-let rec replaceAssignBool (varName: string) (value: arithExpr) (predicate: boolExpr) =
-  match predicate with
-  | True -> True
-  | False -> False
-  | StrongAndExpr(b1, b2) -> StrongAndExpr (replaceAssignBool varName value b1, replaceAssignBool varName value b2)
-  | StrongOrExpr(b1, b2) ->  StrongOrExpr (replaceAssignBool varName value b1, replaceAssignBool varName value b2)
-  | WeakAndExpr(b1, b2) -> WeakAndExpr (replaceAssignBool varName value b1, replaceAssignBool varName value b2)
-  | WeakOrExpr(b1, b2) -> WeakOrExpr (replaceAssignBool varName value b1, replaceAssignBool varName value b2)
-  | NotExpr(b) -> NotExpr (replaceAssignBool varName value b) 
-  | EqualExpr(a1, a2) -> EqualExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
-  | NotEqualExpr(a1, a2) -> NotEqualExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
-  | GreaterExpr(a1, a2) -> GreaterExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
-  | GreaterEqualExpr(a1, a2) -> GreaterEqualExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
-  | LesserExpr(a1, a2) -> LesserExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
-  | LesserEqualExpr(a1, a2) -> LesserEqualExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
+let printSignConf (sc: SignConf) =
+  printfn "%s" (Seq.fold (fun acc (KeyValue(name, sign)) -> $"{acc}{printSign sign, String.length name} ") "" (sortedMem sc.vars))
 
-and replaceAssignArith (varName: string) (value: arithExpr) (predicate: arithExpr) =
-  match predicate with
-  | Num(x) -> Num(x)
-  | GetVariable(name) -> if name = varName then value else GetVariable(name)
-  | GetArrayItem(name, index) -> GetArrayItem(name, index)
-  | TimesArithExpr(a1, a2) -> TimesArithExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
-  | DivArithExpr(a1, a2) -> DivArithExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
-  | PlusArithExpr(a1, a2) -> PlusArithExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
-  | MinusArithExpr(a1, a2) -> MinusArithExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
-  | PowArithExpr(a1, a2) -> PowArithExpr (replaceAssignArith varName value a1, replaceAssignArith varName value a2)
-  | UMinusArithExpr(a) -> UMinusArithExpr (replaceAssignArith varName value a)
+let printSignConfs (scs: List<SignConf>) =
+  printfn "%s" (Seq.fold (fun acc (KeyValue(name, _)) -> $"{acc}{name} ") "" (sortedMem scs[0].vars))
+  Seq.iter(fun sc ->
+    printSignConf sc
+  ) scs
 
-// Replace instances of arrName[index] with value
-let rec replaceAssignArrayBool (varName: string) (index: arithExpr) (value: arithExpr) (predicate: boolExpr) =
-  match predicate with
-  | True -> True
-  | False -> False
-  | StrongAndExpr(b1, b2) -> StrongAndExpr (replaceAssignArrayBool varName index value b1, replaceAssignArrayBool varName index value b2)
-  | StrongOrExpr(b1, b2) ->  StrongOrExpr (replaceAssignArrayBool varName index value b1, replaceAssignArrayBool varName index value b2)
-  | WeakAndExpr(b1, b2) -> WeakAndExpr (replaceAssignArrayBool varName index value b1, replaceAssignArrayBool varName index value b2)
-  | WeakOrExpr(b1, b2) -> WeakOrExpr (replaceAssignArrayBool varName index value b1, replaceAssignArrayBool varName index value b2)
-  | NotExpr(b) -> NotExpr (replaceAssignArrayBool varName index value b) 
-  | EqualExpr(a1, a2) -> EqualExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
-  | NotEqualExpr(a1, a2) -> NotEqualExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
-  | GreaterExpr(a1, a2) -> GreaterExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
-  | GreaterEqualExpr(a1, a2) -> GreaterEqualExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
-  | LesserExpr(a1, a2) -> LesserExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
-  | LesserEqualExpr(a1, a2) -> LesserEqualExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
+let printSigns (signMem: Dictionary<node, List<SignConf>>) (nodeNames: List<(string * node)>) =
+  Seq.iter (fun (KeyValue(n, scs)) ->
+    printfn $"{(getNodeName nodeNames n)}"
+    printSignConfs scs
+    printfn ""
+  ) signMem
 
-and replaceAssignArrayArith (varName: string) (index: arithExpr) (value: arithExpr) (predicate: arithExpr) =
-  match predicate with
-  | Num(x) -> Num(x)
-  | GetVariable(name) -> GetVariable(name)
-  | GetArrayItem(name, aIndex) -> if name = varName && index.Equals(aIndex) then value else GetArrayItem(name, aIndex) // a + b == b + a
-  | TimesArithExpr(a1, a2) -> TimesArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
-  | DivArithExpr(a1, a2) -> DivArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
-  | PlusArithExpr(a1, a2) -> PlusArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
-  | MinusArithExpr(a1, a2) -> MinusArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
-  | PowArithExpr(a1, a2) -> PowArithExpr (replaceAssignArrayArith varName index value a1, replaceAssignArrayArith varName index value a2)
-  | UMinusArithExpr(a) -> UMinusArithExpr (replaceAssignArrayArith varName index value a)
-
-let bottomsUp (acts: List<edge>) (predicate: boolExpr) =
-  List.fold (fun acc act -> 
-    match act with
-    | CommandEdge c ->
-      match c with
-      | Assign(varName, value) -> replaceAssignBool (varName) (value) (acc)
-      | AssignArray(arrName, index, value) -> replaceAssignArrayBool (arrName) (index) (value) (acc) 
-      | Skip -> acc
-    | BoolEdge b -> WeakAndExpr(acc, b)
-  ) predicate (List.rev (Seq.toList acts))
-
-// TODO: Build custom equality checker for arithmetic and boolean expressions
+// qstart
+// x ybob z A
+// + +    + {+,-,0}
+// - -    - {+,-,0}
+//
+// q1
+// x ybob z
+// + -    +
+// - -    -
 
 let parse input =
   // translate string into a buffer of characters
   let lexbuf = LexBuffer<char>.FromString input
-  // translate the buffer into a stream of tokens and parse them
-  let res = FMSufferingParser.start FMSufferingLexer.tokenize lexbuf
-  // return the result of parsing (i.e. value of type "expr")
-  res
+  // translate the buffer into a stream of tokens and parse them, then return it
+  FMSufferingParser.start FMSufferingLexer.tokenize lexbuf
 
 // We implement here the function that interacts with the user
 let rec compute n =
@@ -132,9 +115,10 @@ let rec compute n =
 
         let mutable pg = false
         let mutable pp = false
-        let mutable ev = false
+        let mutable ev = true
         let mutable dt = false
         let mutable pv = false
+        let mutable sa = false
         
         let e =
           if cons.[0] = '#' then
@@ -144,16 +128,12 @@ let rec compute n =
             ev <- Array.contains "ev" args //evaluator function
             dt <- Array.contains "dt" args //determenistic
             pv <- Array.contains "pv" args //program validation
+            sa <- Array.contains "sa" args //Sign analysis
             if args[0].StartsWith("path=") then
               parse (System.IO.File.ReadAllText args[0].[5..])
             else
               parse (Console.ReadLine())
           else
-            pg <- true
-            pp <- true
-            ev <- true
-            dt <- true
-            pv <- true
             parse cons
 
         let c = match e with
@@ -214,6 +194,17 @@ let rec compute n =
           printfn "%A" (Seq.map (fun (sn, acts, en) ->
             let sActs = String.Join("   ", (Seq.map prettyPrintEdge acts))
             $"{getNodeName nodeNames sn} - {sActs} - {getNodeName nodeNames en}") spfs)
+
+        if sa then
+          printf "Enter the desired number of initial Sign Analyses: "
+          let num = int (Console.ReadLine())
+          let signMem = new Dictionary<node, List<SignConf>>()
+          for i = 1 to num do
+            printf $"Enter Sign Analysis #{i}: "
+            let signA = Console.ReadLine()
+            if not (String.IsNullOrWhiteSpace(signA)) then
+              readSigns signA signMem startNode
+          printSigns signMem nodeNames
 
         compute n - 1
         with

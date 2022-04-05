@@ -79,6 +79,8 @@ let printArrMem (arrMem: Dictionary<string, List<int>>) =
 let printState (status: EvalStatus) node nodeNames varMem arrMem =
   $"Status: {evalStatusToString status}\nNode: {getNodeName nodeNames node}\n{printVarMem varMem}\n{printArrMem arrMem}"
 
+let trimAll (strs: string array) = Array.map (fun (el: string) -> el.Trim()) strs
+
 // 1,2,3,4 - [1,2,3,4]
 let readArray (values: string) =
   new List<int>(
@@ -88,11 +90,12 @@ let readArray (values: string) =
 // Memory is expected to be in the same format as the way you type it into the field on FM4Fun
 let readMemory (str: string) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
   str.Split "," |>
-  Array.map (fun el -> el.Trim().Split "=") |>
+  Array.map (fun el -> trimAll (el.Trim().Split "=")) |>
   Array.iter (fun el -> if el[1].[0] = '[' then 
-                          arrMem.Add(el[0].Trim(), readArray (Regex.Replace(el[1], "\[|\]", "")))
+                          arrMem.Add(el[0], readArray (Regex.Replace(el[1], "\[|\]", "")))
                         else
-                          varMem.Add(el[0].Trim(), int el[1]))
+                          varMem.Add(el[0], int el[1]))
+
 
 let rec stepProgram node endNode cap (nodeNames: List<(string * node)>) (varMem: Dictionary<string, int>) (arrMem: Dictionary<string, List<int>>) =
   if cap = 0 then
